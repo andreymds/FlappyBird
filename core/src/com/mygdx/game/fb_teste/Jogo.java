@@ -2,6 +2,8 @@ package com.mygdx.game.fb_teste;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -26,9 +28,11 @@ public class Jogo extends ApplicationAdapter {
 	private float alturaDispositivo;
 	private float posicaoInicialVerticalPassaro = 0;
 	private float variacao = 0;
+	private float posicaoHorizontalPassaro = 0;
 
 	private int gravidade = 0;
 	private int pontos = 0;
+	private  int pontuacaoMaxima = 0;
 	private int estadoJogo=0;
 
 	private float posicaoCanoHorizontal;
@@ -38,6 +42,14 @@ public class Jogo extends ApplicationAdapter {
 	BitmapFont textoPontuacao;
 	BitmapFont textoReiniciar;
 	BitmapFont textoMelhorPontuacao;
+
+	Sound somVoando;
+	Sound somColisao;
+	Sound somPontuacao;
+
+	Preferences preferencias;
+
+	boolean toqueTela = Gdx.input.justTouched(); //controle do toque na tela
 
 	private boolean passouCano = false;
 	private Random random;
@@ -67,6 +79,7 @@ public class Jogo extends ApplicationAdapter {
 			if (!passouCano){ //se passou cano for verdadeiro
 				pontos++; //soma pontos
 				passouCano = true;
+				somPontuacao.play();
 			}
 		}
 		//animação pássaro
@@ -96,8 +109,11 @@ public class Jogo extends ApplicationAdapter {
 		boolean bateuCanoBaixo = Intersector.overlaps(circuloPassaro,retanguloCanoBaixo);
 
 		if(bateuCanoBaixo||bateuCanoCima){
-			Gdx.app.log("Log", "Bateu"); //teste de colisão
-			estadoJogo = 2;
+			if(estadoJogo==1){
+				somColisao.play();
+				estadoJogo = 2;
+			}
+
 		}
 	}
 
@@ -149,13 +165,22 @@ public class Jogo extends ApplicationAdapter {
 		circuloPassaro = new Circle();
 		retanguloCanoCima = new Rectangle();
 		retanguloCanoBaixo = new Rectangle();
+
+		//setando os arquivos de áudio às variáveis
+		somVoando = Gdx.audio.newSound(Gdx.files.internal("som_asa.wav"));
+		somColisao = Gdx.audio.newSound(Gdx.files.internal("som_batida.wav"));
+		somPontuacao = Gdx.audio.newSound(Gdx.files.internal("som_pontos.wav"));
+
+		//define pontuação máxima zerada e que será alterada com um int
+		preferencias = Gdx.app.getPreferences("flappyBird");
+		pontuacaoMaxima = preferencias.getInteger("pontuacaoMaxima",0);
 	}
 
 	private void desenharTexturas() { //desenha a imagem que está instaciada no create
 		batch.begin(); //inicia a renderização da aplicação
 
 		batch.draw(fundo, 0, 0, larguraDispositivo, alturaDispositivo); //fundo
-		batch.draw(passaros[(int) variacao], 50, posicaoInicialVerticalPassaro); //pássaro
+		batch.draw(passaros[(int) variacao], 50 + posicaoHorizontalPassaro, posicaoInicialVerticalPassaro); //pássaro
 
 		//canos
 		batch.draw(canoBaixo,posicaoCanoHorizontal,
@@ -170,28 +195,28 @@ public class Jogo extends ApplicationAdapter {
 			batch.draw(gameOver, larguraDispositivo/2 - gameOver.getWidth()/2, alturaDispositivo/2);
 			textoReiniciar.draw(batch, "TOQUE NA TELA PARA REINICIAR",
 					larguraDispositivo/2 - 350, alturaDispositivo/2-gameOver.getHeight()/2);
-			textoMelhorPontuacao.draw(batch, "SUA MELHOR PONTUAÇÃO É 0 PONTOS",
+			textoMelhorPontuacao.draw(batch, "SUA MELHOR PONTUAÇÃO É : " + pontuacaoMaxima + "PONTOS",
 					larguraDispositivo/2 - 400, alturaDispositivo/2 - gameOver.getHeight()*2);
 		}
 
 		batch.end(); //finaliza a renderização da aplicação
 	}
 
-	private void verificaEstadoJogo() {
-
-		boolean toqueTela = Gdx.input.justTouched(); //controle do toque na tela
+	private void verificaEstadoJogo(){
 
 		if(estadoJogo == 0){ //antes do início do jogo
 			if(toqueTela) //inicia o jogo com o toque
 			{
 				gravidade = -25;
 				estadoJogo = 1;
+				somVoando.play();
 			}
 		} else if (estadoJogo == 1){ //em jogo
 
 			if(toqueTela)//mantém a gravidade
 			{
 				gravidade = -25;
+				somVoando.play(); //toca o som do bater das asas quando toca a tela
 			}
 			//configuração e movimentação dos canos
 			posicaoCanoHorizontal -= Gdx.graphics.getDeltaTime() * 200;
@@ -204,6 +229,24 @@ public class Jogo extends ApplicationAdapter {
 				posicaoInicialVerticalPassaro= posicaoInicialVerticalPassaro-gravidade;
 
 			gravidade++; //alteração das variáveis para movimentação do pássaro
+
+		} else if(estadoJogo == 2){
+
+			if(pontuacaoMaxima>pontos){ //salva a pontuação Máxima nas preferências
+				pontuacaoMaxima = pontos;
+				preferencias.putInteger("pontuacaoMaxima", pontuacaoMaxima);
+			}
+
+			posicaoHorizontalPassaro -= Gdx.graphics.getDeltaTime() * 500; //animação de morte
+
+			if(toqueTela){
+				estadoJogo = 0;
+				pontos = 0;
+				gravidade = 0;
+				posicaoHorizontalPassaro = 0;
+				posicaoInicialVerticalPassaro = alturaDispositivo/2;
+				posicaoCanoHorizontal = larguraDispositivo;
+			}
 		}
 	}
 
